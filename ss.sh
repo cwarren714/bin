@@ -6,7 +6,6 @@ if ! command -v fzf &> /dev/null; then
     echo "fzf is not installed. Please install it to use this script."
     exit 1
 fi
-fdl;
 
 # Path to SSH config file
 SSH_CONFIG="$HOME/.ssh/config"
