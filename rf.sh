@@ -8,34 +8,42 @@ fi
 
 # Function to print usage
 print_usage() {
-    echo "Usage: $0 [-o] [-n] [-h|--help]"
+    echo "Usage: $0 [-o] [-n] [-p] [-e EXCLUDE] [-l DIR] [-h|--help]"
     echo "ripfuz: Interactive search using ripgrep and fzf"
     echo
     echo "Options:"
     echo "  -o         Open the selected file in Vim"
     echo "  -n         Open the selected file in Neovim"
+    echo "  -p         Turn off the preview window (on by default)"
+    echo "  -e EXCLUDE Comma-separated list of glob patterns to exclude (e.g. '*.php,*.js')"
+    echo "  -l DIR     Search in the specified directory instead of current directory"
     echo "  -h, --help Display this help message"
-    echo
-    echo "How to use:"
-    echo "  - Run script and type your search query"
-    echo "  - Results will update in real-time as you type"
-    echo "  - Use CTRL+n and CTRL+p to navigate the results (or use the arrow keys)"
-    echo "  - Press Enter to select a file"
-    echo "  - If -o or -n was passed, the file will open in Vim or Neovim respectively"
-    echo "  - Otherwise, the file path and line number will be displayed when you press Enter"
 }
 
-# Parse command line arguments
+# Default values
 open_in_vim=false
 open_in_neovim=false
+preview=true
+exclude_patterns=""
+search_dir="."
 
-while getopts ":onh-:" opt; do
+# Parse command line arguments
+while getopts ":onpe:l:h-:" opt; do
     case $opt in
         o)
             open_in_vim=true
             ;;
         n)
             open_in_neovim=true
+            ;;
+        p)
+            preview=false
+            ;;
+        e)
+            exclude_patterns=$OPTARG
+            ;;
+        l)
+            search_dir=$OPTARG
             ;;
         h)
             print_usage
@@ -65,13 +73,29 @@ done
 # Function to perform the search
 perform_search() {
     RG_PREFIX="rg --column --line-number --no-heading --color=always --smart-case "
+    
+    # Add exclude patterns if specified
+    if [ -n "$exclude_patterns" ]; then
+        IFS=',' read -ra ADDR <<< "$exclude_patterns"
+        for i in "${ADDR[@]}"; do
+            RG_PREFIX+="--glob '!$i' "
+        done
+    fi
+    
     INITIAL_QUERY="${*:-}"
-    FZF_DEFAULT_COMMAND="$RG_PREFIX '$INITIAL_QUERY'" \
-    fzf --ansi --disabled --query "$INITIAL_QUERY" \
-        --bind "change:reload:$RG_PREFIX {q} || true" \
-        --delimiter : \
-        --preview 'bat --style=numbers --color=always --highlight-line {2} {1}' \
-        --preview-window 'up,60%,border-bottom,+{2}+3/3,~3'
+    FZF_DEFAULT_COMMAND="$RG_PREFIX '$INITIAL_QUERY' $search_dir"
+    
+    if $preview; then
+        fzf --ansi --disabled --query "$INITIAL_QUERY" \
+            --bind "change:reload:$RG_PREFIX {q} $search_dir || true" \
+            --delimiter : \
+            --preview 'bat --style=numbers --color=always --highlight-line {2} {1}' \
+            --preview-window 'up,60%,border-bottom,+{2}+3/3,~3'
+    else
+        fzf --ansi --disabled --query "$INITIAL_QUERY" \
+            --bind "change:reload:$RG_PREFIX {q} $search_dir || true" \
+            --delimiter :
+    fi
 }
 
 # Perform the search and get the selected file
